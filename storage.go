@@ -11,6 +11,7 @@ type Storage interface {
 	CreateAccount(account *Account) error
 	DeleteAccount(id int) error
 	UpdateAccount(account *Account) error
+	GetAccounts() ([]*Account, error)
 }
 
 type PostgresStore struct {
@@ -67,17 +68,30 @@ values ($1, $2, $3, $4, $5, $6)`
 }
 
 func (s *PostgresStore) DeleteAccount(id int) error {
-	query := `delete from users where id = $1;`
-
-	resp, err := s.db.Exec(query, id)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("%v", resp)
 	return nil
 }
 
 func (s *PostgresStore) UpdateAccount(account *Account) error {
 	return nil
+}
+
+func (s *PostgresStore) GetAccounts() ([]*Account, error) {
+	query := `select * from account`
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+
+	accounts := []*Account{}
+	for rows.Next() {
+		account := &Account{}
+		if err := rows.Scan(&account.ID, &account.FirstName, &account.LastName, &account.Balance, &account.Number, &account.CreatedAt); err != nil {
+			return nil, err
+		}
+
+		accounts = append(accounts, account)
+	}
+
+	return accounts, nil
 }

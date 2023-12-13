@@ -45,13 +45,14 @@ func NewAPIServer(address string, store Storage) *ApiServer {
 func (s *ApiServer) Run() {
 	router := mux.NewRouter()
 	router.HandleFunc("/account/{id}", makeHTTPFunc(s.handleAccount))
+	router.HandleFunc("/account", makeHTTPFunc(s.handleGetAccount))
 	log.Println("Server listening on port", s.Address)
 	http.ListenAndServe(s.Address, router)
 }
 
 func (s *ApiServer) handleAccount(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == "GET" {
-		return s.handleGetAccount(w, r)
+		return s.handleGetAccountByID(w, r)
 	}
 	if r.Method == "POST" {
 		return s.handleCreateAccount(w, r)
@@ -66,13 +67,22 @@ func (s *ApiServer) handleAccount(w http.ResponseWriter, r *http.Request) error 
 	return fmt.Errorf("invalid Method: %v", r.Method)
 }
 
-func (s *ApiServer) handleGetAccount(w http.ResponseWriter, r *http.Request) error {
+func (s *ApiServer) handleGetAccountByID(w http.ResponseWriter, r *http.Request) error {
 	vars := mux.Vars(r)
 	userId := vars["id"]
 	account := NewAccount("Nitish", "Kumar")
 	account.ID, _ = strconv.Atoi(userId)
 	WriteJSON(w, http.StatusOK, account)
 	return nil
+}
+
+func (s *ApiServer) handleGetAccount(w http.ResponseWriter, r *http.Request) error {
+	accounts, err := s.Store.GetAccounts()
+	if err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, accounts)
 }
 
 func (s *ApiServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
@@ -94,7 +104,7 @@ func (s *ApiServer) handleModifyAccount(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *ApiServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
-	
+	return nil
 }
 
 func (s *ApiServer) handleTransferAccount(w http.ResponseWriter, r *http.Request) error {
