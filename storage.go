@@ -52,7 +52,17 @@ func (s *PostgresStore) CreateAccountTable() error {
 }
 
 func (s *PostgresStore) GetAccountByID(id int) (*Account, error) {
-	return nil, nil
+	query := `select * from account where id = $1`
+	rows, err := s.db.Query(query, id)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		return scanIntoAccount(rows)
+	}
+
+	return nil, fmt.Errorf("id %v not found", id)
 }
 
 func (s *PostgresStore) CreateAccount(account *Account) error {
@@ -68,6 +78,18 @@ values ($1, $2, $3, $4, $5, $6)`
 }
 
 func (s *PostgresStore) DeleteAccount(id int) error {
+	query := `delete from account where id = $1`
+	res, err := s.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	count, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("rows affected %v", count)
 	return nil
 }
 
@@ -85,13 +107,25 @@ func (s *PostgresStore) GetAccounts() ([]*Account, error) {
 
 	accounts := []*Account{}
 	for rows.Next() {
-		account := &Account{}
-		if err := rows.Scan(&account.ID, &account.FirstName, &account.LastName, &account.Balance, &account.Number, &account.CreatedAt); err != nil {
+		account, err := scanIntoAccount(rows)
+		if err != nil {
 			return nil, err
 		}
-
 		accounts = append(accounts, account)
 	}
 
 	return accounts, nil
+}
+
+func scanIntoAccount(rows *sql.Rows) (*Account, error) {
+	account := &Account{}
+	err := rows.Scan(
+		&account.ID,
+		&account.FirstName,
+		&account.LastName,
+		&account.Balance,
+		&account.Number,
+		&account.CreatedAt)
+
+	return account, err
 }

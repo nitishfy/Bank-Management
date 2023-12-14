@@ -17,7 +17,7 @@ type ApiServer struct {
 }
 
 type ApiError struct {
-	Error string
+	Error string `json:"error"`
 }
 
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
@@ -44,8 +44,8 @@ func NewAPIServer(address string, store Storage) *ApiServer {
 
 func (s *ApiServer) Run() {
 	router := mux.NewRouter()
-	router.HandleFunc("/account/{id}", makeHTTPFunc(s.handleAccount))
 	router.HandleFunc("/account", makeHTTPFunc(s.handleGetAccount))
+	router.HandleFunc("/account/{id}", makeHTTPFunc(s.handleAccount))
 	log.Println("Server listening on port", s.Address)
 	http.ListenAndServe(s.Address, router)
 }
@@ -68,12 +68,16 @@ func (s *ApiServer) handleAccount(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *ApiServer) handleGetAccountByID(w http.ResponseWriter, r *http.Request) error {
-	vars := mux.Vars(r)
-	userId := vars["id"]
-	account := NewAccount("Nitish", "Kumar")
-	account.ID, _ = strconv.Atoi(userId)
-	WriteJSON(w, http.StatusOK, account)
-	return nil
+	id, err := getID(r)
+	if err != nil {
+		return err
+	}
+	account, err := s.Store.GetAccountByID(id)
+	if err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, account)
 }
 
 func (s *ApiServer) handleGetAccount(w http.ResponseWriter, r *http.Request) error {
@@ -104,9 +108,27 @@ func (s *ApiServer) handleModifyAccount(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *ApiServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	id, err := getID(r)
+	if err != nil {
+		return err
+	}
+
+	if err := s.Store.DeleteAccount(id); err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, map[string]int{"deleted": id})
 }
 
 func (s *ApiServer) handleTransferAccount(w http.ResponseWriter, r *http.Request) error {
 	return nil
+}
+
+func getID(r *http.Request) (int, error) {
+	id, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		return id, fmt.Errorf("invalid id format: %v", err)
+	}
+
+	return id, nil
 }
