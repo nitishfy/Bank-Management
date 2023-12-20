@@ -3,10 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
+	"time"
 )
 
 type apiFunc func(http.ResponseWriter, *http.Request) error
@@ -44,7 +47,7 @@ func NewAPIServer(address string, store Storage) *ApiServer {
 
 func (s *ApiServer) Run() {
 	router := mux.NewRouter()
-	router.HandleFunc("/account", makeHTTPFunc(s.handleGetAccount))
+	router.HandleFunc("/account", withJWTAuth(makeHTTPFunc(s.handleGetAccount)))
 	router.HandleFunc("/account/{id}", makeHTTPFunc(s.handleAccount))
 	log.Println("Server listening on port", s.Address)
 	http.ListenAndServe(s.Address, router)
@@ -122,6 +125,44 @@ func (s *ApiServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) 
 
 func (s *ApiServer) handleTransferAccount(w http.ResponseWriter, r *http.Request) error {
 	return nil
+}
+
+func withJWTAuth(f http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("calling JWT auth middleware")
+		tokenString := r.Header.Get("x-jwt-token")
+		token, err := validateJWT(tokenString)
+		fmt.Println(token)
+		if err != nil {
+			WriteJSON(w, http.StatusForbidden, ApiError{Error: "invalid token"})
+			return
+		}
+
+		f(w, r)
+	}
+}
+
+func createJWT(account *Account) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"expiresAt":     time.Date(2015, 10, 10, 12, 0, 0, 0, time.UTC).Unix(),
+		"accountNumber": account.Number,
+	})
+	secret := os.Getenv("JWT_SECRET")
+
+	// create and return a complete signed JWT
+	return token.SignedString(secret)
+}
+
+func validateJWT(tokenString string) (*jwt.Token, error) {
+	secret := os.Getenv("JWT_SECRET")
+
+	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+
+		return []byte(secret), nil
+	})
 }
 
 func getID(r *http.Request) (int, error) {
