@@ -29,7 +29,7 @@ func WriteJSON(w http.ResponseWriter, status int, v any) error {
 	return json.NewEncoder(w).Encode(v)
 }
 
-// makeHTTPFunc converts the api Function into handler func so that the[ handler can accept it
+// makeHTTPFunc converts the api Function into handler func so that the handler can accept it
 func makeHTTPFunc(f apiFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := f(w, r); err != nil {
@@ -49,6 +49,7 @@ func (s *ApiServer) Run() {
 	router := mux.NewRouter()
 	router.HandleFunc("/account", withJWTAuth(makeHTTPFunc(s.handleGetAccount)))
 	router.HandleFunc("/account/{id}", makeHTTPFunc(s.handleAccount))
+	router.HandleFunc("/transfer", makeHTTPFunc(s.handleTransferAccount))
 	log.Println("Server listening on port", s.Address)
 	http.ListenAndServe(s.Address, router)
 }
@@ -75,6 +76,7 @@ func (s *ApiServer) handleGetAccountByID(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		return err
 	}
+
 	account, err := s.Store.GetAccountByID(id)
 	if err != nil {
 		return err
@@ -116,15 +118,22 @@ func (s *ApiServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) 
 		return err
 	}
 
-	if err := s.Store.DeleteAccount(id); err != nil {
+	if err = s.Store.DeleteAccount(id); err != nil {
 		return err
 	}
 
 	return WriteJSON(w, http.StatusOK, map[string]int{"deleted": id})
 }
 
+// Transfer amount to other account
 func (s *ApiServer) handleTransferAccount(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	transferReq := TransferRequest{}
+	if err := json.NewDecoder(r.Body).Decode(&transferReq); err != nil {
+		return err
+	}
+	defer r.Body.Close()
+
+	return WriteJSON(w, http.StatusOK, transferReq)
 }
 
 func withJWTAuth(f http.HandlerFunc) http.HandlerFunc {
